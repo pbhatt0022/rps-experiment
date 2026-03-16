@@ -4,11 +4,15 @@
 
 \## Overview
 
+
+
 This project processes free-text human comments collected for a Rock-Paper-Scissors image-labeling task and converts them into clean, canonical labels suitable for downstream machine learning workflows.
 
 
 
 The main challenge in this dataset is that labels were written as natural comments by multiple people, which introduced inconsistency in:
+
+
 
 \- capitalization
 
@@ -78,7 +82,11 @@ To address this, the project implements a staged normalization and canonicalizat
 
 \### 1. Metadata Extraction
 
+
+
 The script reads all `.supplemental-metadata.json` files in a dataset folder and extracts:
+
+
 
 \- image filename
 
@@ -94,7 +102,11 @@ The script reads all `.supplemental-metadata.json` files in a dataset folder and
 
 \### 2. Basic Normalization
 
+
+
 Basic normalization performs:
+
+
 
 \- leading/trailing whitespace removal
 
@@ -104,7 +116,9 @@ Basic normalization performs:
 
 
 
-Example:
+\*\*Example:\*\*
+
+
 
 \- `" Rock "` → `"rock"`
 
@@ -112,7 +126,11 @@ Example:
 
 \### 3. Advanced Normalization
 
+
+
 Advanced normalization performs:
+
+
 
 \- Unicode normalization using NFKC
 
@@ -124,7 +142,9 @@ Advanced normalization performs:
 
 
 
-Examples:
+\*\*Examples:\*\*
+
+
 
 \- `"rock 🪨"` → `"rock"`
 
@@ -134,7 +154,11 @@ Examples:
 
 \### 4. Canonicalization
 
+
+
 After normalization, comments are mapped into a final label space using:
+
+
 
 \- exact matching
 
@@ -148,7 +172,9 @@ After normalization, comments are mapped into a final label space using:
 
 
 
-Final canonical labels:
+\*\*Final canonical labels:\*\*
+
+
 
 \- `rock`
 
@@ -162,7 +188,9 @@ Final canonical labels:
 
 
 
-Examples:
+\*\*Examples:\*\*
+
+
 
 \- `"stone"` → `rock`
 
@@ -178,7 +206,11 @@ Examples:
 
 \### 5. Image-Level Label Assignment
 
+
+
 Each image may have multiple comments. Final image labels are assigned by:
+
+
 
 \- counting valid canonical labels
 
@@ -200,6 +232,8 @@ Each image may have multiple comments. Final image labels are assigned by:
 
 Three thresholds were compared for image-level labeling:
 
+
+
 \- `0.5`
 
 \- `0.6`
@@ -212,7 +246,9 @@ Three thresholds were compared for image-level labeling:
 
 
 
-Reason:
+\*\*Reason:\*\*
+
+
 
 \- `0.5` and `0.6` produced identical automatic labeling coverage
 
@@ -232,6 +268,8 @@ Reason:
 
 \### Comment-Level Results
 
+
+
 \- Total comments processed: \*\*380\*\*
 
 \- Unique raw comment variants: \*\*34\*\*
@@ -243,6 +281,8 @@ Reason:
 
 
 \### Final Canonical Counts
+
+
 
 \- `rock`: \*\*141\*\*
 
@@ -260,7 +300,11 @@ This means \*\*375 out of 380 comments\*\* were successfully mapped into valid t
 
 \### Simulated Test Results
 
+
+
 A simulated comment test suite covering:
+
+
 
 \- capitalization
 
@@ -288,6 +332,8 @@ achieved:
 
 \### Threshold Comparison
 
+
+
 \- Threshold `0.5`: 3 review cases
 
 \- Threshold `0.6`: 3 review cases
@@ -310,6 +356,8 @@ At `0.75`, one additional image with a 2/3 majority vote was pushed into review,
 
 The remaining review cases fall into two categories:
 
+
+
 1\. \*\*No valid comments\*\* after preprocessing
 
 2\. \*\*Low majority ratio\*\* under stricter thresholds
@@ -329,6 +377,8 @@ For the final chosen threshold `0.6`, the review queue contains only images with
 
 
 \### Main Final Outputs (`output/`)
+
+
 
 \- `comment\_level\_audit.csv`  
 
@@ -379,6 +429,8 @@ For the final chosen threshold `0.6`, the review queue contains only images with
 
 
 \### Plots
+
+
 
 \- `raw\_hist.png`
 
