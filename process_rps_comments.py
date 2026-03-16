@@ -4,7 +4,7 @@ import json
 import math
 import argparse
 import unicodedata
-from collections import Counter, defaultdict
+from collections import Counter
 
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -66,7 +66,6 @@ def remove_non_text_noise(comment: str) -> str:
     # Replace punctuation/symbols with spaces
     cleaned_chars = []
     for ch in c:
-        category = unicodedata.category(ch)
 
         # Keep letters and spaces
         if ch.isalpha() or ch.isspace():
