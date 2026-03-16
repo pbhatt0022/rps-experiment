@@ -1,0 +1,4 @@
+image_file,total_comments,valid_comment_count,rock_votes,paper_votes,scissors_votes,noise_count,ambiguous_count,majority_label,majority_votes,majority_ratio,final_label,review_reason,image_exists,image_width,image_height,image_mode
+IMG20260213152639.jpg,2,0,0,0,0,2,0,,0,,review,no_valid_comments,True,1800,4000,RGB
+IMG20260213161658.jpg,1,0,0,0,0,1,0,,0,,review,no_valid_comments,True,1800,4000,RGB
+IMG_20260215_100727.jpg,1,0,0,0,0,1,0,,0,,review,no_valid_comments,True,3120,4160,RGB
