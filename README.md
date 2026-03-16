@@ -120,7 +120,7 @@ Basic normalization performs:
 
 
 
-\- `" Rock "` → `"rock"`
+\- `" Rock "` -> `"rock"`
 
 
 
@@ -146,9 +146,9 @@ Advanced normalization performs:
 
 
 
-\- `"rock 🪨"` → `"rock"`
+\- `"rock 🪨"` -> `"rock"`
 
-\- `"Paper 📄"` → `"paper"`
+\- `"Paper 📄"` -> `"paper"`
 
 
 
@@ -192,15 +192,15 @@ After normalization, comments are mapped into a final label space using:
 
 
 
-\- `"stone"` → `rock`
+\- `"stone"` -> `rock`
 
-\- `"papet"` → `paper`
+\- `"papet"` -> `paper`
 
-\- `"sissors"` → `scissors`
+\- `"sissors"` -> `scissors`
 
-\- `"rock paper"` → `ambiguous`
+\- `"rock paper"` -> `ambiguous`
 
-\- `"phone"` → `noise`
+\- `"phone"` -> `noise`
 
 
 
@@ -452,6 +452,10 @@ For the final chosen threshold `0.6`, the review queue contains only images with
 
 
 
+Make sure the `rps-data-for-comments/` folder is available locally, or provide the path to your dataset folder when running the script.
+
+
+
 ```bash
 
 \# Install dependencies
@@ -462,7 +466,13 @@ pip install -r requirements.txt
 
 \# Run the main pipeline
 
-python process\_rps\_comments.py C:\\Users\\priya\\OneDrive\\Desktop\\rps-experiment\\rps-data-for-comments --threshold 0.6
+python process\_rps\_comments.py <path\_to\_dataset\_folder> --threshold 0.6
+
+
+
+\# Example
+
+python process\_rps\_comments.py ./rps-data-for-comments --threshold 0.6
 
 
 
@@ -474,9 +484,9 @@ python tests\_simulated\_comments.py
 
 \# Run threshold comparison experiments
 
-python process\_rps\_comments.py C:\\Users\\priya\\OneDrive\\Desktop\\rps-experiment\\rps-data-for-comments --threshold 0.5
+python process\_rps\_comments.py ./rps-data-for-comments --threshold 0.5
 
-python process\_rps\_comments.py C:\\Users\\priya\\OneDrive\\Desktop\\rps-experiment\\rps-data-for-comments --threshold 0.6
+python process\_rps\_comments.py ./rps-data-for-comments --threshold 0.6
 
-python process\_rps\_comments.py C:\\Users\\priya\\OneDrive\\Desktop\\rps-experiment\\rps-data-for-comments --threshold 0.75
+python process\_rps\_comments.py ./rps-data-for-comments --threshold 0.75
 
