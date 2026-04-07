@@ -362,9 +362,19 @@ def save_counter_to_csv(counter_obj: Counter, output_csv: str, column_name="comm
     df.to_csv(output_csv, index=False)
 
 
+def sanitize_plot_label(label):
+    if label is None:
+        return ""
+
+    text = str(label)
+    cleaned = "".join(ch for ch in text if ch.isascii() and (ch.isprintable() or ch.isspace()))
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    return cleaned if cleaned else "[non-ascii]"
+
+
 def plot_counter(counter_obj: Counter, title: str, xlabel: str, output_png: str, top_n=None):
     items = counter_obj.most_common(top_n) if top_n else counter_obj.most_common()
-    labels = [k for k, _ in items]
+    labels = [sanitize_plot_label(k) for k, _ in items]
     counts = [v for _, v in items]
 
     plt.figure(figsize=(10, 6))
@@ -502,15 +512,7 @@ def build_normalization_stats(df_comments: pd.DataFrame):
     return pd.DataFrame(stats)
 
 
-def main():
-    parser = argparse.ArgumentParser(description="Bulk process RPS metadata JSON files.")
-    parser.add_argument("folder", type=str, help="Folder containing JSON metadata and images")
-    parser.add_argument("--threshold", type=float, default=0.6, help="Majority vote threshold")
-    args = parser.parse_args()
-
-    folder_path = args.folder
-    threshold = args.threshold
-
+def run_comment_pipeline(folder_path: str, threshold: float = 0.6, output_dir: str = "output"):
     json_files = sorted(
         f for f in os.listdir(folder_path)
         if f.endswith(".supplemental-metadata.json")
@@ -526,14 +528,14 @@ def main():
 
     if not all_rows:
         print("No comments found.")
-        return
+        return None, None, None
 
     df_comments = pd.DataFrame(all_rows)
 
-    os.makedirs("output", exist_ok=True)
+    os.makedirs(output_dir, exist_ok=True)
 
     # Save comment-level audit
-    df_comments.to_csv("output/comment_level_audit.csv", index=False)
+    df_comments.to_csv(os.path.join(output_dir, "comment_level_audit.csv"), index=False)
 
     # Counters
     raw_counts = Counter(df_comments["raw_comment"])
@@ -541,28 +543,28 @@ def main():
     advanced_counts = Counter(df_comments["advanced_normalized"])
     canonical_counts = Counter(df_comments["canonical_label"])
 
-    save_counter_to_csv(raw_counts, "output/raw_comment_counts.csv", "comment")
-    save_counter_to_csv(basic_counts, "output/basic_normalized_counts.csv", "comment")
-    save_counter_to_csv(advanced_counts, "output/advanced_normalized_counts.csv", "comment")
-    save_counter_to_csv(canonical_counts, "output/canonical_label_counts.csv", "label")
+    save_counter_to_csv(raw_counts, os.path.join(output_dir, "raw_comment_counts.csv"), "comment")
+    save_counter_to_csv(basic_counts, os.path.join(output_dir, "basic_normalized_counts.csv"), "comment")
+    save_counter_to_csv(advanced_counts, os.path.join(output_dir, "advanced_normalized_counts.csv"), "comment")
+    save_counter_to_csv(canonical_counts, os.path.join(output_dir, "canonical_label_counts.csv"), "label")
 
     # Image-level summary
     df_image_summary, df_review = summarize_image_labels(df_comments, folder_path, threshold=threshold)
-    df_image_summary.to_csv("output/image_label_summary.csv", index=False)
-    df_review.to_csv("output/review_queue.csv", index=False)
+    df_image_summary.to_csv(os.path.join(output_dir, "image_label_summary.csv"), index=False)
+    df_review.to_csv(os.path.join(output_dir, "review_queue.csv"), index=False)
 
     # Stats
     df_stats = build_normalization_stats(df_comments)
-    df_stats.to_csv("output/normalization_stats.csv", index=False)
+    df_stats.to_csv(os.path.join(output_dir, "normalization_stats.csv"), index=False)
 
     # Plots
-    plot_counter(raw_counts, "Raw Comment Histogram", "Raw Comments", "output/raw_hist.png", top_n=20)
-    plot_counter(basic_counts, "Basic Normalized Histogram", "Normalized Comments", "output/basic_norm_hist.png", top_n=20)
-    plot_counter(advanced_counts, "Advanced Normalized Histogram", "Advanced Normalized Comments", "output/advanced_norm_hist.png", top_n=20)
-    plot_counter(canonical_counts, "Canonical Label Histogram", "Canonical Labels", "output/canonical_hist.png")
+    plot_counter(raw_counts, "Raw Comment Histogram", "Raw Comments", os.path.join(output_dir, "raw_hist.png"), top_n=20)
+    plot_counter(basic_counts, "Basic Normalized Histogram", "Normalized Comments", os.path.join(output_dir, "basic_norm_hist.png"), top_n=20)
+    plot_counter(advanced_counts, "Advanced Normalized Histogram", "Advanced Normalized Comments", os.path.join(output_dir, "advanced_norm_hist.png"), top_n=20)
+    plot_counter(canonical_counts, "Canonical Label Histogram", "Canonical Labels", os.path.join(output_dir, "canonical_hist.png"))
 
     if "majority_ratio" in df_image_summary.columns and not df_image_summary.empty:
-        plot_majority_ratio_histogram(df_image_summary["majority_ratio"], "output/majority_ratio_hist.png")
+        plot_majority_ratio_histogram(df_image_summary["majority_ratio"], os.path.join(output_dir, "majority_ratio_hist.png"))
 
     print("\n=== FINAL CANONICAL COUNTS ===")
     for label, count in canonical_counts.most_common():
@@ -571,7 +573,21 @@ def main():
     print("\n=== IMAGE LABEL SUMMARY ===")
     print(df_image_summary["final_label"].value_counts(dropna=False))
 
-    print("\nDone. Outputs saved in /output")
+    print(f"\nDone. Outputs saved in {os.path.abspath(output_dir)}")
+    return df_comments, df_image_summary, df_review
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Bulk process RPS metadata JSON files.")
+    parser.add_argument("folder", type=str, help="Folder containing JSON metadata and images")
+    parser.add_argument("--threshold", type=float, default=0.6, help="Majority vote threshold")
+    parser.add_argument("--output-dir", type=str, default="output", help="Directory for CSV and plot outputs")
+    args = parser.parse_args()
+
+    folder_path = args.folder
+    threshold = args.threshold
+    output_dir = args.output_dir
+    run_comment_pipeline(folder_path, threshold=threshold, output_dir=output_dir)
 
 
 if __name__ == "__main__":

@@ -1,3 +1,5 @@
+import sys
+
 from process_rps_comments import canonicalize_comment
 
 TEST_CASES = [
@@ -22,6 +24,11 @@ TEST_CASES = [
 ]
 
 def main():
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except AttributeError:
+        pass
+
     passed = 0
 
     print("Simulated Comment Normalization Test Results")

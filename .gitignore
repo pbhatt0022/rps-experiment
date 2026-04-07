@@ -1,1 +1,3 @@
-rps-data-for-comments/ 
+rps-data-for-comments/
+__pycache__/
+*.py[cod]
