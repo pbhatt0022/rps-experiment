@@ -16,6 +16,7 @@ except ImportError:
 
 
 VALID_LABELS = {"rock", "paper", "scissors"}
+METADATA_SUFFIX_RE = re.compile(r"^(?P<base_image>.+)\.supplemental-metadata(?:\((?P<copy_index>\d+)\))?\.json$")
 SYNONYM_MAP = {
     "rock": "rock",
     "stone": "rock",
@@ -295,11 +296,44 @@ def canonicalize_comment(comment: str):
     }
 
 
+def is_metadata_filename(file_name: str) -> bool:
+    return METADATA_SUFFIX_RE.match(file_name) is not None
+
+
+def resolve_image_file_from_metadata(json_path: str, metadata_title: str):
+    file_name = os.path.basename(json_path)
+    match = METADATA_SUFFIX_RE.match(file_name)
+    parent = os.path.dirname(json_path)
+
+    candidates = []
+    if match:
+        base_image = match.group("base_image")
+        copy_index = match.group("copy_index")
+        if copy_index is not None:
+            stem, ext = os.path.splitext(base_image)
+            candidates.append(f"{stem}({copy_index}){ext}")
+        candidates.append(base_image)
+
+    if metadata_title:
+        candidates.append(metadata_title)
+
+    seen = set()
+    for candidate in candidates:
+        if not candidate or candidate in seen:
+            continue
+        seen.add(candidate)
+        if os.path.exists(os.path.join(parent, candidate)):
+            return candidate
+
+    return metadata_title or candidates[0]
+
+
 def extract_metadata_rows(json_path: str):
     with open(json_path, "r", encoding="utf-8") as f:
         data = json.load(f)
 
     image_title = data.get("title", "")
+    resolved_image_file = resolve_image_file_from_metadata(json_path, image_title)
     image_views = data.get("imageViews", "")
     created_formatted = data.get("creationTime", {}).get("formatted", "")
     comments = data.get("sharedAlbumComments", [])
@@ -318,7 +352,8 @@ def extract_metadata_rows(json_path: str):
 
         rows.append({
             "metadata_file": os.path.basename(json_path),
-            "image_file": image_title,
+            "image_file": resolved_image_file,
+            "metadata_image_title": image_title,
             "image_views": image_views,
             "image_created_time": created_formatted,
             "comment_owner": owner,
@@ -515,7 +550,7 @@ def build_normalization_stats(df_comments: pd.DataFrame):
 def run_comment_pipeline(folder_path: str, threshold: float = 0.6, output_dir: str = "output"):
     json_files = sorted(
         f for f in os.listdir(folder_path)
-        if f.endswith(".supplemental-metadata.json")
+        if is_metadata_filename(f)
     )
 
     print(f"Found {len(json_files)} metadata files.")

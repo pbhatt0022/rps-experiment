@@ -60,6 +60,11 @@ def build_processed_filename(image_name: str, output_format: str):
     return f"{stem}_{digest}.{output_format}"
 
 
+def build_augmented_filename(processed_image_path: str, augmentation_suffix: str):
+    source = Path(processed_image_path)
+    return f"{source.stem}_{augmentation_suffix}{source.suffix}"
+
+
 def parse_split_ratios(value: str):
     parts = [part.strip() for part in value.split(",")]
     if len(parts) != 3:
@@ -123,7 +128,7 @@ def assign_split_labels(manifest_df: pd.DataFrame, split_ratios: dict[str, float
                 row["split"] = split
                 split_rows.append(row)
 
-    result = pd.DataFrame(split_rows, columns=list(manifest_df.columns) + ["split"])
+    result = pd.DataFrame(split_rows, columns=list(manifest_df.columns))
     return result.sort_values(["split", "label", "source_image_file"]).reset_index(drop=True)
 
 
@@ -138,6 +143,41 @@ def export_split_directories(manifest_df: pd.DataFrame, dataset_root: Path):
             source = Path(row["processed_image_path"])
             destination = split_root / split_name / row["label"] / source.name
             shutil.copy2(source, destination)
+            row["split_image_path"] = str(destination.resolve())
+
+
+def export_train_flip_augmentation(split_manifest_df: pd.DataFrame, dataset_root: Path):
+    train_rows = split_manifest_df[split_manifest_df["split"] == "train"].copy()
+    if train_rows.empty:
+        return split_manifest_df, 0
+
+    augmented_rows = []
+    for row in train_rows.to_dict(orient="records"):
+        source_path = Path(row["split_image_path"])
+        destination = source_path.parent / build_augmented_filename(source_path.name, "flip")
+
+        with Image.open(source_path) as image:
+            flipped = ImageOps.mirror(image)
+            save_kwargs = {}
+            if source_path.suffix.lower() in {".jpg", ".jpeg"}:
+                save_kwargs.update({"quality": 95, "subsampling": 0})
+            flipped.save(destination, **save_kwargs)
+
+        augmented_row = dict(row)
+        augmented_row["processed_image_path"] = str(destination.resolve())
+        augmented_row["split_image_path"] = str(destination.resolve())
+        augmented_row["is_augmented"] = True
+        augmented_row["augmentation_type"] = "horizontal_flip"
+        augmented_row["source_base_image"] = row["processed_image_path"]
+        augmented_rows.append(augmented_row)
+
+    if not augmented_rows:
+        return split_manifest_df, 0
+
+    augmented_df = pd.DataFrame(augmented_rows, columns=split_manifest_df.columns)
+    combined = pd.concat([split_manifest_df, augmented_df], ignore_index=True)
+    combined = combined.sort_values(["split", "label", "source_image_file", "is_augmented"]).reset_index(drop=True)
+    return combined, len(augmented_rows)
 
 
 def build_split_summary(manifest_df: pd.DataFrame):
@@ -176,12 +216,14 @@ def prepare_dataset(
     create_splits: bool,
     split_ratios: dict[str, float],
     split_seed: int,
+    augment_train_horizontal_flip: bool,
     zip_output: bool,
 ):
     manifest_columns = [
         "source_image_file",
         "source_image_path",
         "processed_image_path",
+        "split_image_path",
         "label",
         "original_width",
         "original_height",
@@ -194,7 +236,14 @@ def prepare_dataset(
         "noise_count",
         "ambiguous_count",
         "review_reason",
+        "split",
+        "is_augmented",
+        "augmentation_type",
+        "source_base_image",
     ]
+    if augment_train_horizontal_flip and not create_splits:
+        raise ValueError("train-only augmentation requires --create-splits")
+
     _, df_image_summary, _ = run_comment_pipeline(
         dataset_folder,
         threshold=label_threshold,
@@ -260,6 +309,7 @@ def prepare_dataset(
             "source_image_file": source_name,
             "source_image_path": str(source_path.resolve()),
             "processed_image_path": str(output_path.resolve()),
+            "split_image_path": "",
             "label": label,
             "original_width": original_width,
             "original_height": original_height,
@@ -272,16 +322,32 @@ def prepare_dataset(
             "noise_count": row["noise_count"],
             "ambiguous_count": row["ambiguous_count"],
             "review_reason": row["review_reason"],
+            "split": "",
+            "is_augmented": False,
+            "augmentation_type": "",
+            "source_base_image": "",
         })
 
     manifest_df = pd.DataFrame(manifest_rows, columns=manifest_columns)
     if not manifest_df.empty:
         manifest_df = manifest_df.sort_values(["label", "source_image_file"])
 
+    split_manifest_df = pd.DataFrame(columns=manifest_columns)
+    augmented_train_count = 0
     if create_splits:
         manifest_df = assign_split_labels(manifest_df, split_ratios=split_ratios, seed=split_seed)
         export_split_directories(manifest_df, dataset_root)
-        write_split_manifests(manifest_df, dataset_root)
+        split_rows = []
+        for split_name in ["train", "val", "test"]:
+            split_subset = manifest_df[manifest_df["split"] == split_name].copy()
+            for row in split_subset.to_dict(orient="records"):
+                split_image_path = dataset_root / "splits" / split_name / row["label"] / Path(row["processed_image_path"]).name
+                row["split_image_path"] = str(split_image_path.resolve())
+                split_rows.append(row)
+        split_manifest_df = pd.DataFrame(split_rows, columns=manifest_columns)
+        if augment_train_horizontal_flip:
+            split_manifest_df, augmented_train_count = export_train_flip_augmentation(split_manifest_df, dataset_root)
+        write_split_manifests(split_manifest_df, dataset_root)
     else:
         manifest_df = manifest_df.reset_index(drop=True)
 
@@ -307,8 +373,11 @@ def prepare_dataset(
         "create_splits": create_splits,
         "split_ratios": split_ratios,
         "split_seed": split_seed,
+        "train_augmentation_enabled": augment_train_horizontal_flip,
+        "train_augmentation_types": ["horizontal_flip"] if augment_train_horizontal_flip else [],
+        "augmented_train_count": augmented_train_count,
         "class_counts": manifest_df["label"].value_counts().sort_index().to_dict(),
-        "split_counts": build_split_summary(manifest_df) if create_splits else {},
+        "split_counts": build_split_summary(split_manifest_df if not split_manifest_df.empty else manifest_df) if create_splits else {},
         "num_review_images": int((df_image_summary["final_label"] == "review").sum()),
         "num_skipped_images": len(skipped_rows),
     }
@@ -337,6 +406,7 @@ def main():
     parser.add_argument("--create-splits", action="store_true", help="Create stratified train/val/test manifests and split folders")
     parser.add_argument("--split-ratios", type=parse_split_ratios, default=parse_split_ratios("0.8,0.1,0.1"), help="Train,val,test split ratios, e.g. 0.8,0.1,0.1")
     parser.add_argument("--split-seed", type=int, default=42, help="Random seed used for reproducible dataset splits")
+    parser.add_argument("--augment-train-horizontal-flip", action="store_true", help="Export horizontal-flip augmentation for training split images only")
     parser.add_argument("--zip-output", action="store_true", help="Create a zip archive of the final dataset folder")
     args = parser.parse_args()
 
@@ -359,6 +429,7 @@ def main():
         create_splits=args.create_splits,
         split_ratios=args.split_ratios,
         split_seed=args.split_seed,
+        augment_train_horizontal_flip=args.augment_train_horizontal_flip,
         zip_output=args.zip_output,
     )
 
@@ -367,9 +438,19 @@ def main():
         print("No labeled images were exported.")
     else:
         print(manifest_df["label"].value_counts().sort_index())
-    if "split" in manifest_df.columns:
+    if create_splits := ("split" in manifest_df.columns and not manifest_df["split"].replace("", pd.NA).isna().all()):
         print("\nSplit counts:")
-        print(manifest_df.groupby(["split", "label"]).size())
+        split_manifest_path = Path(args.dataset_output_dir) / "train_manifest.csv"
+        if split_manifest_path.exists():
+            split_counts_df = pd.concat(
+                [
+                    pd.read_csv(Path(args.dataset_output_dir) / "train_manifest.csv"),
+                    pd.read_csv(Path(args.dataset_output_dir) / "val_manifest.csv"),
+                    pd.read_csv(Path(args.dataset_output_dir) / "test_manifest.csv"),
+                ],
+                ignore_index=True,
+            )
+            print(split_counts_df.groupby(["split", "label"]).size())
     print(f"\nReview images listed: {len(review_manifest)}")
     print(f"Skipped images: {len(skipped_rows)}")
     if archive_path:

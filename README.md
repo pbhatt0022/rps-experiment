@@ -29,8 +29,11 @@ The goal is to give the model team a clean, reproducible dataset instead of raw 
 - `MODEL_HANDOFF.md`
   Shorter handoff-oriented notes for the ML team.
 
-- `rps-data-for-comments/`
-  Source images and `.supplemental-metadata.json` files.
+- `DATA_STAGE_REPORT.md`
+  Detailed academic-style write-up of the data collection and preprocessing stage.
+
+- `Takeout/Google Photos/rps-data-for-comments/`
+  Canonical full dataset exported through Google Takeout and used for official runs.
 
 - `output/`
   Current comment-processing outputs for the chosen threshold `0.6`.
@@ -40,10 +43,19 @@ The goal is to give the model team a clean, reproducible dataset instead of raw 
 
 ## Source Data
 
-The dataset folder contains:
+The canonical source dataset folder is:
 
-- image files such as `.jpg`, `.heic`, `.dng`, and `.png`
-- metadata JSON files with image info and shared album comments
+- `./Takeout/Google Photos/rps-data-for-comments`
+
+The full Takeout dataset currently contains:
+
+- `4841` metadata files matched by the processing pipeline
+- `4683` source media files
+- `4346` `.jpg` files
+- `232` `.heic` files
+- `59` `.dng` files
+- `4` `.png` files
+- `42` `.mp4` files
 
 The pipeline treats the shared album comments as raw human annotations.
 
@@ -144,6 +156,12 @@ Reason:
 - `0.75` pushed an extra image into review
 - `0.6` gave the best balance between coverage and conservatism
 
+On the full dataset rerun, the review-queue sizes were:
+
+- threshold `0.5`: `488`
+- threshold `0.6`: `495`
+- threshold `0.75`: `500`
+
 ## Existing Comment Outputs
 
 The comment-processing pipeline produces:
@@ -175,6 +193,37 @@ The comment-processing pipeline produces:
 - histogram PNG files
   Visual summaries of comment and label distributions.
 
+## Full-Dataset Results
+
+The current official full-dataset run at threshold `0.6` produced:
+
+- total comments processed: `5565`
+- unique raw comment variants: `117`
+- unique variants after basic normalization: `78`
+- unique variants after advanced normalization: `61`
+
+Final canonical comment counts:
+
+- `rock`: `1530`
+- `paper`: `1526`
+- `scissors`: `1561`
+- `noise`: `947`
+- `ambiguous`: `1`
+
+Image-level outcomes:
+
+- `2925` image-level entries assessed
+- `850` final `scissors`
+- `792` final `rock`
+- `788` final `paper`
+- `495` `review`
+
+Review reasons:
+
+- `485` `no_valid_comments`
+- `9` `low_majority_ratio`
+- `1` `ambiguous_comments_present`
+
 ## Image Preprocessing Pipeline
 
 The integrated image-preprocessing flow is implemented in `prepare_rps_ml_dataset.py`.
@@ -191,6 +240,7 @@ By default it:
 - pads to a square canvas
 - saves processed outputs grouped by class
 - writes manifests and a config file for reproducibility
+- optionally exports train-only horizontal-flip augmentation after split creation
 
 ### Default Settings
 
@@ -217,6 +267,7 @@ You can change:
 - split ratios
 - split random seed
 - whether a zip bundle is created
+- whether train-only horizontal-flip augmentation is created
 
 ## Model-Handoff Outputs
 
@@ -231,6 +282,9 @@ A dataset build can produce:
 - `review_manifest.csv`
   Images that still require manual review.
 
+- `skipped_images.csv`
+  Entries that could not be exported into the final image package because the source image was missing or unreadable.
+
 - `dataset_config.json`
   Exact preprocessing settings used for that dataset build.
 
@@ -242,6 +296,23 @@ A dataset build can produce:
 
 - `<dataset-output-dir>.zip`
   Zip archive created when `--zip-output` is used.
+
+For the latest full-dataset export at threshold `0.6`:
+
+- `1985` labeled images were successfully exported
+- `445` entries were skipped during image export
+- `495` review images were listed separately
+
+Base split counts:
+
+- train: `1588`
+- val: `198`
+- test: `199`
+
+With train-only horizontal-flip augmentation enabled:
+
+- train rows increase from `1588` to `3176`
+- validation and test remain unchanged
 
 ## Installation
 
@@ -256,7 +327,7 @@ pip install -r requirements.txt
 ### 1. Run Comment Cleaning Only
 
 ```bash
-python process_rps_comments.py ./rps-data-for-comments --threshold 0.6 --output-dir output
+python process_rps_comments.py "./Takeout/Google Photos/rps-data-for-comments" --threshold 0.6 --output-dir output
 ```
 
 ### 2. Run Normalization Tests
@@ -268,25 +339,26 @@ python tests_simulated_comments.py
 ### 3. Build a Model-Ready Dataset
 
 ```bash
-python prepare_rps_ml_dataset.py ./rps-data-for-comments --label-threshold 0.6 --image-size 128 --dataset-output-dir prepared_dataset
+python prepare_rps_ml_dataset.py "./Takeout/Google Photos/rps-data-for-comments" --label-threshold 0.6 --image-size 128 --dataset-output-dir prepared_dataset
 ```
 
 ### 4. Build a Model-Ready Dataset With Splits And A Zip Bundle
 
 ```bash
-python prepare_rps_ml_dataset.py ./rps-data-for-comments --label-threshold 0.6 --image-size 128 --dataset-output-dir prepared_dataset --create-splits --zip-output
+python prepare_rps_ml_dataset.py "./Takeout/Google Photos/rps-data-for-comments" --label-threshold 0.6 --image-size 128 --dataset-output-dir prepared_dataset --create-splits --augment-train-horizontal-flip --zip-output
 ```
 
 ### 5. Example Parameter Variants
 
 ```bash
-python prepare_rps_ml_dataset.py ./rps-data-for-comments --image-size 224
-python prepare_rps_ml_dataset.py ./rps-data-for-comments --pad-color 255,255,255
-python prepare_rps_ml_dataset.py ./rps-data-for-comments --output-format png
-python prepare_rps_ml_dataset.py ./rps-data-for-comments --resample bicubic
-python prepare_rps_ml_dataset.py ./rps-data-for-comments --include-review
-python prepare_rps_ml_dataset.py ./rps-data-for-comments --create-splits --split-ratios 0.7,0.15,0.15 --split-seed 7
-python prepare_rps_ml_dataset.py ./rps-data-for-comments --zip-output
+python prepare_rps_ml_dataset.py "./Takeout/Google Photos/rps-data-for-comments" --image-size 224
+python prepare_rps_ml_dataset.py "./Takeout/Google Photos/rps-data-for-comments" --pad-color 255,255,255
+python prepare_rps_ml_dataset.py "./Takeout/Google Photos/rps-data-for-comments" --output-format png
+python prepare_rps_ml_dataset.py "./Takeout/Google Photos/rps-data-for-comments" --resample bicubic
+python prepare_rps_ml_dataset.py "./Takeout/Google Photos/rps-data-for-comments" --include-review
+python prepare_rps_ml_dataset.py "./Takeout/Google Photos/rps-data-for-comments" --create-splits --split-ratios 0.7,0.15,0.15 --split-seed 7
+python prepare_rps_ml_dataset.py "./Takeout/Google Photos/rps-data-for-comments" --create-splits --augment-train-horizontal-flip
+python prepare_rps_ml_dataset.py "./Takeout/Google Photos/rps-data-for-comments" --zip-output
 ```
 
 ## How To Generate The Email-Ready Zip File
@@ -294,7 +366,7 @@ python prepare_rps_ml_dataset.py ./rps-data-for-comments --zip-output
 If you want a zip file locally that you can directly email to the model team, run:
 
 ```bash
-python prepare_rps_ml_dataset.py ./rps-data-for-comments --label-threshold 0.6 --image-size 128 --dataset-output-dir prepared_dataset_handoff --create-splits --zip-output
+python prepare_rps_ml_dataset.py "./Takeout/Google Photos/rps-data-for-comments" --label-threshold 0.6 --image-size 128 --dataset-output-dir prepared_dataset_handoff --create-splits --augment-train-horizontal-flip --zip-output
 ```
 
 This will create:
@@ -304,6 +376,10 @@ This will create:
 
 The zip file will be created in the repository root beside the script files, so you can attach it directly to an email or upload it to shared storage.
 
+The current full-dataset handoff bundle created in this repo is:
+
+- `prepared_dataset_handoff_full.zip`
+
 ## Why This Repository Is Useful For The ML Team
 
 The model team receives:
@@ -312,6 +388,7 @@ The model team receives:
 - a filtered training export that excludes unresolved review images by default
 - consistent image dimensions and RGB color mode
 - optional train/val/test splits
+- optional train-only horizontal-flip augmentation
 - a manifest linking every processed image back to its source
 - a config file that records the exact preprocessing choices
 - an optional zip file for easy handoff
