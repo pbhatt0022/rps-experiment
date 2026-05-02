@@ -395,8 +395,18 @@ def main():
     )
     parser.add_argument("folder", type=str, help="Folder containing source images and metadata JSON files")
     parser.add_argument("--label-threshold", type=float, default=0.6, help="Majority-vote threshold for final labels")
-    parser.add_argument("--label-output-dir", type=str, default="output_model_handoff", help="Where to save comment-processing outputs")
-    parser.add_argument("--dataset-output-dir", type=str, default="prepared_dataset", help="Where to save processed images and manifests")
+    parser.add_argument(
+        "--label-output-dir",
+        type=str,
+        default="runs/model_handoff/comment_pipeline",
+        help="Where to save comment-processing outputs",
+    )
+    parser.add_argument(
+        "--dataset-output-dir",
+        type=str,
+        default="runs/model_handoff/prepared_dataset",
+        help="Where to save processed images and manifests",
+    )
     parser.add_argument("--image-size", type=int, default=128, help="Square output size for processed images")
     parser.add_argument("--pad-color", type=parse_rgb_triplet, default=(0, 0, 0), help="RGB pad color, e.g. 0,0,0")
     parser.add_argument("--output-format", choices=["jpg", "png"], default="jpg", help="File format for processed images")

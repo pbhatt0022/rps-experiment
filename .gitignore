@@ -1,3 +1,22 @@
+# Local datasets and raw exports
 rps-data-for-comments/
+Takeout/
+data/
+datasets/
+
+# Generated experiment outputs and handoff artifacts
+runs/
+artifacts/
+output*/
+prepared_dataset*/
+*.zip
+
+# Python cache / local env
 __pycache__/
 *.py[cod]
+.pytest_cache/
+.venv/
+
+# OS files
+Thumbs.db
+.DS_Store

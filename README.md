@@ -1,322 +1,170 @@
-# Rock Paper Scissors Data Preparation Pipeline
+# RPS Experiment: Data Preparation for an MLOps Project
 
-## Overview
+This repository contains the data-preparation stage of a semester-long university MLOps project built around a deliberately simple task: classify hand-sign images as `rock`, `paper`, or `scissors`.
 
-This repository prepares a Rock-Paper-Scissors image dataset for downstream machine learning.
+The simplicity is the point. Rock-Paper-Scissors is easy to understand, which makes it a good vehicle for studying the parts of machine learning systems that are usually harder to see: messy annotation, inconsistent source data, review queues, preprocessing decisions, reproducibility, and handoff between teams or pipeline stages.
 
-It covers the full data-preparation flow:
+This work was developed in the context of an `MLOps & Model Deployment` course, but the repository is written to be understandable to readers outside that course as well. If you are visiting from GitHub, the best way to read this project is as a small, concrete case study in how MLOps begins at the data stage, not only at deployment time.
 
-1. read raw image metadata and human comment annotations
-2. clean free-text comments into canonical labels
-3. assign one final label per image using vote aggregation and review logic
-4. preprocess images into a consistent model-ready format
-5. optionally create train/val/test splits
-6. optionally package the final dataset as a zip file for handoff
+## What The RPS Experiment Is
 
-The goal is to give the model team a clean, reproducible dataset instead of raw Google Photos exports and noisy human comments.
+- A collaborative image collection project using student-contributed Rock-Paper-Scissors hand-sign photos.
+- A human-labeling workflow that used Google Photos comments as raw annotations.
+- A Python pipeline that cleans those comments, aggregates votes, and prepares a model-ready dataset.
+- A teaching exercise in the practical gap between "we have data" and "we have a reliable dataset."
 
-## Repository Structure
+## The Ethos Behind The Project
 
-- `process_rps_comments.py`
-  Main comment-cleaning and image-label assignment pipeline.
+This repository is driven by a simple MLOps idea: keep the prediction task small so the pipeline problems become impossible to ignore.
 
-- `prepare_rps_ml_dataset.py`
-  End-to-end handoff script that reruns label cleaning, preprocesses images, optionally creates splits, and optionally creates a zip bundle.
+Part of the point of spending serious time on a small problem is to understand the fundamentals well. Bigger projects often hide those fundamentals behind scale, tooling, or model complexity. This one tries to make them visible.
 
-- `tests_simulated_comments.py`
-  Small test suite for normalization edge cases.
+The main lessons behind the experiment are:
 
-- `MODEL_HANDOFF.md`
-  Shorter handoff-oriented notes for the ML team.
+- Human labels are not ground truth. They are raw signals that need cleaning, normalization, aggregation, and auditing.
+- Convenience during data collection often creates complexity later in preprocessing and quality control.
+- Review queues are a feature, not a failure. Low-confidence items should be surfaced instead of being forced into the training set.
+- Reproducibility starts before model training. The data-preparation path, thresholds, manifests, and outputs all matter.
+- Even a classroom-scale project can expose real MLOps concerns such as traceability, handoff quality, and source-of-truth drift.
 
-- `DATA_STAGE_REPORT.md`
-  Detailed academic-style write-up of the data collection and preprocessing stage.
+## Why Rock-Paper-Scissors?
+
+On paper, this is a very simple computer vision problem. That is exactly why it is useful.
+
+Because the labels are familiar and the classes are easy to explain, the project can focus on deeper operational questions:
+
+- What happens when annotators use typos, emojis, slang, or irrelevant comments?
+- How conservative should an automatic label-assignment rule be?
+- What should happen to images with weak agreement or no valid labels?
+- What happens when metadata exists but the corresponding source image is missing or unreadable?
+- How do we package the final dataset so another team can actually use and reproduce it?
+
+The goal is not to claim that Rock-Paper-Scissors is a difficult modeling benchmark. The goal is to use a small problem to study foundational MLOps behavior in a controlled, visible way.
+
+## What This Repository Covers
+
+This repository focuses on the data-preparation side of the MLOps lifecycle:
+
+1. Read Google Takeout metadata and shared-album comments.
+2. Normalize messy free-text annotations.
+3. Map comments into canonical labels.
+4. Aggregate multiple comments into one image-level decision.
+5. Route uncertain or unresolved items into a manual review queue.
+6. Preprocess accepted images into a consistent model-ready format.
+7. Optionally create stratified splits, train-only augmentation, and a zip bundle for handoff.
+
+This is intentionally a data-stage repository. It does not try to present a full production deployment system in one place. Instead, it makes the upstream dataset work explicit and inspectable.
+
+## Current Dataset Snapshot
+
+The canonical raw dataset used by the pipeline is:
 
 - `Takeout/Google Photos/rps-data-for-comments/`
-  Canonical full dataset exported through Google Takeout and used for official runs.
 
-- `output/`
-  Current comment-processing outputs for the chosen threshold `0.6`.
+Current full-dataset figures from the latest repository outputs:
 
-- `output_t05/`, `output_t06/`, `output_t075/`
-  Threshold-comparison outputs used during analysis.
-
-## Source Data
-
-The canonical source dataset folder is:
-
-- `./Takeout/Google Photos/rps-data-for-comments`
-
-The full Takeout dataset currently contains:
-
-- `4841` metadata files matched by the processing pipeline
-- `4683` source media files
-- `4346` `.jpg` files
+- `4,820` supplemental metadata files processed
+- `4,683` source media files
+- `4,346` `.jpg` files
 - `232` `.heic` files
 - `59` `.dng` files
 - `4` `.png` files
 - `42` `.mp4` files
+- `5,565` comments processed
 
-The pipeline treats the shared album comments as raw human annotations.
+Current image-level outcomes at threshold `0.6`:
 
-## Comment-Cleaning Pipeline
-
-### 1. Metadata Extraction
-
-The script reads all `.supplemental-metadata.json` files and extracts:
-
-- image filename
-- image metadata
-- comment text
-- comment owner
-- comment timestamp
-
-### 2. Basic Normalization
-
-Basic normalization:
-
-- strips surrounding whitespace
-- lowercases text
-- collapses repeated internal whitespace
-
-Example:
-
-- `" Rock "` -> `"rock"`
-
-### 3. Advanced Normalization
-
-Advanced normalization:
-
-- applies Unicode normalization
-- removes punctuation, emojis, and decorative symbols
-- preserves alphabetic text and spaces
-- collapses whitespace again
-
-Examples:
-
-- `"rock 🪨"` -> `"rock"`
-- `"Paper 📄"` -> `"paper"`
-
-### 4. Canonicalization
-
-Normalized comments are mapped into:
-
-- `rock`
-- `paper`
-- `scissors`
-- `noise`
-- `ambiguous`
-
-The mapping uses:
-
-- exact matches
-- synonym mapping
-- token-based matching
-- conservative typo correction using Levenshtein distance
-- optional Hamming and Soundex-style fallbacks
-
-Examples:
-
-- `"stone"` -> `rock`
-- `"papet"` -> `paper`
-- `"sissors"` -> `scissors`
-- `"rock paper"` -> `ambiguous`
-- `"phone"` -> `noise`
-
-### 5. Image-Level Label Assignment
-
-Each image can have multiple comments. The script:
-
-- counts valid class votes
-- finds the majority class
-- computes a majority ratio
-- sends uncertain images to review
-
-Current review logic:
-
-- if there are no valid comments, mark the image as `review`
-- if the majority ratio is above threshold and there are no ambiguous comments, assign the majority label
-- otherwise, mark the image as `review`
-
-## Threshold Analysis
-
-Thresholds compared:
-
-- `0.5`
-- `0.6`
-- `0.75`
-
-Chosen threshold:
-
-- `0.6`
-
-Reason:
-
-- `0.5` and `0.6` gave the same automatic coverage
-- `0.75` pushed an extra image into review
-- `0.6` gave the best balance between coverage and conservatism
-
-On the full dataset rerun, the review-queue sizes were:
-
-- threshold `0.5`: `488`
-- threshold `0.6`: `495`
-- threshold `0.75`: `500`
-
-## Existing Comment Outputs
-
-The comment-processing pipeline produces:
-
-- `comment_level_audit.csv`
-  Full trace from raw comment to cleaned label.
-
-- `raw_comment_counts.csv`
-  Counts of raw comment variants.
-
-- `basic_normalized_counts.csv`
-  Counts after basic normalization.
-
-- `advanced_normalized_counts.csv`
-  Counts after advanced normalization.
-
-- `canonical_label_counts.csv`
-  Final canonical-label counts.
-
-- `image_label_summary.csv`
-  One row per image with vote statistics and final decision.
-
-- `review_queue.csv`
-  Images that still need manual review.
-
-- `normalization_stats.csv`
-  Summary statistics for the normalization pipeline.
-
-- histogram PNG files
-  Visual summaries of comment and label distributions.
-
-## Full-Dataset Results
-
-The current official full-dataset run at threshold `0.6` produced:
-
-- total comments processed: `5565`
-- unique raw comment variants: `117`
-- unique variants after basic normalization: `78`
-- unique variants after advanced normalization: `61`
-
-Final canonical comment counts:
-
-- `rock`: `1530`
-- `paper`: `1526`
-- `scissors`: `1561`
-- `noise`: `947`
-- `ambiguous`: `1`
-
-Image-level outcomes:
-
-- `2925` image-level entries assessed
 - `850` final `scissors`
 - `792` final `rock`
 - `788` final `paper`
 - `495` `review`
 
-Review reasons:
+That means `2,430` images were automatically assigned a final class label, while `495` were held back for manual review.
 
-- `485` `no_valid_comments`
-- `9` `low_majority_ratio`
-- `1` `ambiguous_comments_present`
+## Why Some Images Are Reviewed Or Skipped
 
-## Image Preprocessing Pipeline
+The pipeline is conservative by design.
 
-The integrated image-preprocessing flow is implemented in `prepare_rps_ml_dataset.py`.
+- If an image has no valid class comments, it is marked `review`.
+- If the majority vote is too weak, it is marked `review`.
+- If ambiguous comments are present, it is marked `review`.
+- If a labeled item cannot be matched to a usable source image during export, it is written to `skipped_images.csv` instead of silently disappearing.
 
-By default it:
+This is one of the core cautionary lessons of the project: uncertainty should be recorded and surfaced, not hidden behind forced labels or incomplete exports.
 
-- reruns the comment-cleaning pipeline
-- filters to final labeled images
-- excludes `review` images from the training export
-- opens source images with Pillow
-- applies EXIF orientation correction
-- converts images to RGB
-- resizes while preserving aspect ratio
-- pads to a square canvas
-- saves processed outputs grouped by class
-- writes manifests and a config file for reproducibility
-- optionally exports train-only horizontal-flip augmentation after split creation
+## What The Pipeline Produces
 
-### Default Settings
+By default, new local runs are written under `runs/`, which keeps generated files out of the repo root and out of Git.
 
-- label threshold: `0.6`
-- image size: `128`
-- pad color: `0,0,0`
-- output format: `jpg`
-- JPEG quality: `95`
-- resample filter: `lanczos`
+The comment-processing stage writes outputs such as:
 
-### Adjustable Parameters
+- `runs/comment_pipeline/current/comment_level_audit.csv`
+  Full trace from raw comment to cleaned label.
+- `runs/comment_pipeline/current/raw_comment_counts.csv`
+  Frequency of raw comment variants.
+- `runs/comment_pipeline/current/basic_normalized_counts.csv`
+  Frequency after basic normalization.
+- `runs/comment_pipeline/current/advanced_normalized_counts.csv`
+  Frequency after advanced normalization.
+- `runs/comment_pipeline/current/canonical_label_counts.csv`
+  Final canonical label counts.
+- `runs/comment_pipeline/current/image_label_summary.csv`
+  One row per image with vote statistics and final decision.
+- `runs/comment_pipeline/current/review_queue.csv`
+  Images that require manual review.
+- `runs/comment_pipeline/current/normalization_stats.csv`
+  Summary statistics for the normalization pipeline.
 
-You can change:
+Curated threshold-comparison snapshots that are useful for understanding the project are kept under:
 
-- label threshold
-- output directories
-- image size
-- pad color
-- output format
-- JPEG quality
-- resample filter
-- whether review images are included
-- whether train/val/test splits are created
-- split ratios
-- split random seed
-- whether a zip bundle is created
-- whether train-only horizontal-flip augmentation is created
+- `artifacts/comment_pipeline/current_snapshot/`
+- `artifacts/comment_pipeline/threshold_050_snapshot/`
+- `artifacts/comment_pipeline/threshold_060_snapshot/`
+- `artifacts/comment_pipeline/threshold_075_snapshot/`
 
-## Model-Handoff Outputs
+The dataset-build stage writes outputs such as:
 
-A dataset build can produce:
+- `runs/model_handoff/prepared_dataset/manifest.csv`
+  One row per exported image with source path, processed path, label, and preprocessing metadata.
+- `runs/model_handoff/prepared_dataset/review_manifest.csv`
+  Review items excluded from the training export.
+- `runs/model_handoff/prepared_dataset/skipped_images.csv`
+  Export failures caused by missing or unreadable source images.
+- `runs/model_handoff/prepared_dataset/dataset_config.json`
+  Exact preprocessing settings used for the build.
+- `runs/model_handoff/prepared_dataset/train_manifest.csv`
+- `runs/model_handoff/prepared_dataset/val_manifest.csv`
+- `runs/model_handoff/prepared_dataset/test_manifest.csv`
+- `runs/model_handoff/prepared_dataset.zip`
 
-- `images/rock/`, `images/paper/`, `images/scissors/`
-  Preprocessed images grouped by label.
+For the latest full handoff export:
 
-- `manifest.csv`
-  One row per exported image with source path, processed path, label, original size, processed size, and vote statistics.
-
-- `review_manifest.csv`
-  Images that still require manual review.
-
-- `skipped_images.csv`
-  Entries that could not be exported into the final image package because the source image was missing or unreadable.
-
-- `dataset_config.json`
-  Exact preprocessing settings used for that dataset build.
-
-- `train_manifest.csv`, `val_manifest.csv`, `test_manifest.csv`
-  Created when train/val/test splitting is enabled.
-
-- `splits/train/...`, `splits/val/...`, `splits/test/...`
-  Split-specific directories created when splitting is enabled.
-
-- `<dataset-output-dir>.zip`
-  Zip archive created when `--zip-output` is used.
-
-For the latest full-dataset export at threshold `0.6`:
-
-- `1985` labeled images were successfully exported
-- `445` entries were skipped during image export
+- `1,985` labeled images were successfully exported
+- `445` items were skipped during image export
 - `495` review images were listed separately
+- train / validation / test counts were `1,588 / 198 / 199`
+- train-only horizontal-flip augmentation expands train rows from `1,588` to `3,176`
 
-Base split counts:
+## Repository Structure
 
-- train: `1588`
-- val: `198`
-- test: `199`
-
-With train-only horizontal-flip augmentation enabled:
-
-- train rows increase from `1588` to `3176`
-- validation and test remain unchanged
+- `process_rps_comments.py`
+  Comment normalization, canonicalization, and image-level label assignment.
+- `prepare_rps_ml_dataset.py`
+  End-to-end preprocessing and handoff packaging script.
+- `contributor_stats.py`
+  Optional utility for comment-contributor statistics and audit outputs.
+- `tests_simulated_comments.py`
+  Small normalization test suite covering noisy human-label cases.
+- `docs/`
+  Project-facing documentation, including the model handoff note and the detailed report PDF.
+- `artifacts/comment_pipeline/`
+  Curated committed snapshots used for threshold analysis and repo documentation.
+- `runs/`
+  Git-ignored local outputs from pipeline runs and handoff builds.
+- `Takeout/Google Photos/rps-data-for-comments/`
+  Canonical source dataset folder used for local official runs and ignored from Git.
 
 ## Installation
-
-Install dependencies:
 
 ```bash
 pip install -r requirements.txt
@@ -324,11 +172,15 @@ pip install -r requirements.txt
 
 ## Usage
 
-### 1. Run Comment Cleaning Only
+### 1. Process Comments Only
 
 ```bash
-python process_rps_comments.py "./Takeout/Google Photos/rps-data-for-comments" --threshold 0.6 --output-dir output
+python process_rps_comments.py "./Takeout/Google Photos/rps-data-for-comments"
 ```
+
+Default output location:
+
+- `runs/comment_pipeline/current/`
 
 ### 2. Run Normalization Tests
 
@@ -336,19 +188,24 @@ python process_rps_comments.py "./Takeout/Google Photos/rps-data-for-comments" -
 python tests_simulated_comments.py
 ```
 
-### 3. Build a Model-Ready Dataset
+### 3. Build A Model-Ready Dataset
 
 ```bash
-python prepare_rps_ml_dataset.py "./Takeout/Google Photos/rps-data-for-comments" --label-threshold 0.6 --image-size 128 --dataset-output-dir prepared_dataset
+python prepare_rps_ml_dataset.py "./Takeout/Google Photos/rps-data-for-comments"
 ```
 
-### 4. Build a Model-Ready Dataset With Splits And A Zip Bundle
+Default output locations:
+
+- `runs/model_handoff/comment_pipeline/`
+- `runs/model_handoff/prepared_dataset/`
+
+### 4. Build Splits, Augmentation, And A Zip Handoff
 
 ```bash
-python prepare_rps_ml_dataset.py "./Takeout/Google Photos/rps-data-for-comments" --label-threshold 0.6 --image-size 128 --dataset-output-dir prepared_dataset --create-splits --augment-train-horizontal-flip --zip-output
+python prepare_rps_ml_dataset.py "./Takeout/Google Photos/rps-data-for-comments" --label-threshold 0.6 --image-size 128 --dataset-output-dir runs/model_handoff/prepared_dataset_handoff --create-splits --augment-train-horizontal-flip --zip-output
 ```
 
-### 5. Example Parameter Variants
+### 5. Common Variants
 
 ```bash
 python prepare_rps_ml_dataset.py "./Takeout/Google Photos/rps-data-for-comments" --image-size 224
@@ -357,40 +214,26 @@ python prepare_rps_ml_dataset.py "./Takeout/Google Photos/rps-data-for-comments"
 python prepare_rps_ml_dataset.py "./Takeout/Google Photos/rps-data-for-comments" --resample bicubic
 python prepare_rps_ml_dataset.py "./Takeout/Google Photos/rps-data-for-comments" --include-review
 python prepare_rps_ml_dataset.py "./Takeout/Google Photos/rps-data-for-comments" --create-splits --split-ratios 0.7,0.15,0.15 --split-seed 7
-python prepare_rps_ml_dataset.py "./Takeout/Google Photos/rps-data-for-comments" --create-splits --augment-train-horizontal-flip
-python prepare_rps_ml_dataset.py "./Takeout/Google Photos/rps-data-for-comments" --zip-output
 ```
 
-## How To Generate The Email-Ready Zip File
-
-If you want a zip file locally that you can directly email to the model team, run:
+### 6. Generate Contributor Statistics
 
 ```bash
-python prepare_rps_ml_dataset.py "./Takeout/Google Photos/rps-data-for-comments" --label-threshold 0.6 --image-size 128 --dataset-output-dir prepared_dataset_handoff --create-splits --augment-train-horizontal-flip --zip-output
+python contributor_stats.py "./Takeout/Google Photos/rps-data-for-comments"
 ```
 
-This will create:
+Default output location:
 
-- a dataset folder: `prepared_dataset_handoff/`
-- a zip archive: `prepared_dataset_handoff.zip`
+- `runs/contributor_stats/current/`
 
-The zip file will be created in the repository root beside the script files, so you can attach it directly to an email or upload it to shared storage.
+## How To Read This Repository
 
-The current full-dataset handoff bundle created in this repo is:
+If you want the quick story:
 
-- `prepared_dataset_handoff_full.zip`
+- Read this `README` for the experiment rationale and the pipeline overview.
+- Read `docs/model_handoff.md` if you care about the dataset as a downstream ML artifact.
+- Read `docs/reports/mlops_data_report.pdf` if you want the detailed report-style explanation of collection, labeling, preprocessing, and observed failure modes.
 
-## Why This Repository Is Useful For The ML Team
+If you are evaluating this repository from outside the course context, the most important takeaway is this:
 
-The model team receives:
-
-- cleaned labels instead of raw comments
-- a filtered training export that excludes unresolved review images by default
-- consistent image dimensions and RGB color mode
-- optional train/val/test splits
-- optional train-only horizontal-flip augmentation
-- a manifest linking every processed image back to its source
-- a config file that records the exact preprocessing choices
-- an optional zip file for easy handoff
-
-This makes the dataset easier to train on, audit, and regenerate when preprocessing settings change.
+The project is not valuable because Rock-Paper-Scissors is novel. It is valuable because it turns a familiar toy problem into a concrete lesson about how fragile, human, and operational the data side of MLOps really is.

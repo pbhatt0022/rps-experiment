@@ -11,11 +11,11 @@ This repository now supports the full data-preparation flow for the Rock-Paper-S
 
 Canonical source dataset:
 
-- `C:\Users\priya\OneDrive\Desktop\rps-experiment\Takeout\Google Photos\rps-data-for-comments`
+- `Takeout/Google Photos/rps-data-for-comments/`
 
 Current full-dataset source composition:
 
-- `4841` metadata files matched by the processing pipeline
+- `4820` metadata files matched by the processing pipeline
 - `4683` source media files
 - `4346` `.jpg`
 - `232` `.heic`
@@ -62,6 +62,11 @@ Running `prepare_rps_ml_dataset.py` creates:
 - `skipped_images.csv`
   Only created if some files could not be opened or processed.
 
+By default, new local outputs are written under:
+
+- `runs/model_handoff/comment_pipeline/`
+- `runs/model_handoff/prepared_dataset/`
+
 For the current full-dataset run at threshold `0.6`:
 
 - `1985` labeled images were successfully exported
@@ -102,13 +107,13 @@ Current full-dataset label outcomes at threshold `0.6`:
 ### Comment Processing Only
 
 ```bash
-python process_rps_comments.py "./Takeout/Google Photos/rps-data-for-comments" --threshold 0.6 --output-dir output
+python process_rps_comments.py "./Takeout/Google Photos/rps-data-for-comments"
 ```
 
 ### Full Model Handoff Build
 
 ```bash
-python prepare_rps_ml_dataset.py "./Takeout/Google Photos/rps-data-for-comments" --label-threshold 0.6 --image-size 128 --dataset-output-dir prepared_dataset --create-splits --augment-train-horizontal-flip --zip-output
+python prepare_rps_ml_dataset.py "./Takeout/Google Photos/rps-data-for-comments" --label-threshold 0.6 --image-size 128 --dataset-output-dir runs/model_handoff/prepared_dataset_handoff --create-splits --augment-train-horizontal-flip --zip-output
 ```
 
 This configuration produces:
@@ -144,6 +149,4 @@ The model team gets:
 - a config file that makes preprocessing choices explicit and repeatable
 - an optional zip bundle for easy handoff
 
-The current ready-to-send handoff zip generated in this repository is:
-
-- `prepared_dataset_handoff_full.zip`
+The latest local handoff bundles produced by the default workflow are written under `runs/model_handoff/`.

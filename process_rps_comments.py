@@ -616,7 +616,12 @@ def main():
     parser = argparse.ArgumentParser(description="Bulk process RPS metadata JSON files.")
     parser.add_argument("folder", type=str, help="Folder containing JSON metadata and images")
     parser.add_argument("--threshold", type=float, default=0.6, help="Majority vote threshold")
-    parser.add_argument("--output-dir", type=str, default="output", help="Directory for CSV and plot outputs")
+    parser.add_argument(
+        "--output-dir",
+        type=str,
+        default="runs/comment_pipeline/current",
+        help="Directory for CSV and plot outputs",
+    )
     args = parser.parse_args()
 
     folder_path = args.folder
